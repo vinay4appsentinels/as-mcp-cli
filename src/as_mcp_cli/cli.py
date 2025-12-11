@@ -253,33 +253,104 @@ def run_command(command, mcp_name):
     return 1
 
 
+def print_help():
+    """Print help message"""
+    print("as-mcp-cli - Pass-through CLI for MCP servers")
+    print("")
+    print("Usage:")
+    print("  as-mcp-cli <mcp_name> [--debug] <command>    Run a command")
+    print("  as-mcp-cli auth <mcp_name> [options]         Authenticate with an MCP server")
+    print("")
+    print("Commands:")
+    print("  auth        Authenticate or re-authenticate with an MCP server")
+    print("  <command>   Any command to pass through to the MCP server")
+    print("")
+    print("Options:")
+    print("  --debug     Enable debug output")
+    print("  -h, --help  Show this help message")
+    print("")
+    print("Auth Options:")
+    print("  --server-url URL   MCP server URL (required for new servers)")
+    print("  --client-id ID     OAuth client ID (optional, uses existing or registers)")
+    print("  --force            Force re-authentication even if token is valid")
+    print("")
+    print("Examples:")
+    print("  # Run commands")
+    print("  as-mcp-cli appsentinels tenant all-tenants")
+    print("  as-mcp-cli appsentinels-prod1 api list nykaa_production --limit 10")
+    print("  as-mcp-cli appsentinels --debug api tags list nykaa_production")
+    print("")
+    print("  # Authentication")
+    print("  as-mcp-cli auth appsentinels --server-url https://example.com/mcp/sse")
+    print("  as-mcp-cli auth appsentinels --force")
+    print("")
+    print("Credentials are stored in ~/.claude/.credentials.json")
+
+
+def run_auth_command(args):
+    """Handle auth subcommand"""
+    from .auth import run_auth
+
+    if not args or args[0] in ("-h", "--help"):
+        print("Usage: as-mcp-cli auth <mcp_name> [options]")
+        print("")
+        print("Authenticate with an MCP server using OAuth.")
+        print("")
+        print("Arguments:")
+        print("  mcp_name           MCP server name to authenticate with")
+        print("")
+        print("Options:")
+        print("  --server-url URL   MCP server SSE URL (required for new servers)")
+        print("  --client-id ID     OAuth client ID (optional)")
+        print("  --force            Force re-authentication even if token is valid")
+        print("  -h, --help         Show this help message")
+        print("")
+        print("Examples:")
+        print("  as-mcp-cli auth my-server --server-url https://example.com/mcp/sse")
+        print("  as-mcp-cli auth appsentinels --force")
+        print("  as-mcp-cli auth appsentinels --client-id my-client-id")
+        return 0
+
+    mcp_name = args[0]
+    args = args[1:]
+
+    server_url = None
+    client_id = None
+    force = False
+
+    # Parse options
+    i = 0
+    while i < len(args):
+        if args[i] == "--server-url" and i + 1 < len(args):
+            server_url = args[i + 1]
+            i += 2
+        elif args[i] == "--client-id" and i + 1 < len(args):
+            client_id = args[i + 1]
+            i += 2
+        elif args[i] == "--force":
+            force = True
+            i += 1
+        else:
+            print(f"Unknown option: {args[i]}", file=sys.stderr)
+            return 1
+
+    return run_auth(mcp_name, server_url, client_id, force)
+
+
 def main():
     global DEBUG
 
     args = sys.argv[1:]
 
     if not args or args[0] in ("-h", "--help"):
-        print("as-mcp-cli - Pass-through CLI for MCP servers")
-        print("")
-        print("Usage: as-mcp-cli <mcp_name> [--debug] <command>")
-        print("")
-        print("Arguments:")
-        print("  mcp_name    MCP server name (e.g., appsentinels, appsentinels-prod1)")
-        print("  command     Command to pass through to the MCP")
-        print("")
-        print("Options:")
-        print("  --debug     Enable debug output")
-        print("  -h, --help  Show this help message")
-        print("")
-        print("Examples:")
-        print("  as-mcp-cli appsentinels tenant all-tenants")
-        print("  as-mcp-cli appsentinels-prod1 api list nykaa_production --limit 10")
-        print("  as-mcp-cli appsentinels --debug api tags list nykaa_production")
-        print("")
-        print("Credentials are loaded from ~/.claude/.credentials.json")
+        print_help()
         sys.exit(0)
 
-    # First argument is always the MCP name
+    # Check for auth command
+    if args[0] == "auth":
+        sys.exit(run_auth_command(args[1:]))
+
+    # First argument is the MCP name
     mcp_name = args[0]
     args = args[1:]
 

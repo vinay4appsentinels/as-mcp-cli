@@ -255,36 +255,71 @@ def run_command(command, mcp_name):
 
 def print_help():
     """Print help message"""
-    print("as-mcp-cli - Pass-through CLI for MCP servers")
+    print("as-mcp-cli - CLI for MCP servers")
     print("")
     print("Usage:")
-    print("  as-mcp-cli <mcp_name> [--debug] <command>    Run a command")
-    print("  as-mcp-cli auth <mcp_name> [options]         Authenticate with an MCP server")
+    print("  as-mcp-cli <command> [options]")
     print("")
     print("Commands:")
-    print("  auth        Authenticate or re-authenticate with an MCP server")
-    print("  <command>   Any command to pass through to the MCP server")
+    print("  mcp <name> <command>    Run a command on an MCP server")
+    print("  auth <name> [options]   Authenticate with an MCP server")
+    print("  add <name> <url>        Add a new MCP server")
+    print("  list                    List configured MCP servers")
+    print("  remove <name>           Remove an MCP server")
     print("")
     print("Options:")
     print("  --debug     Enable debug output")
     print("  -h, --help  Show this help message")
     print("")
-    print("Auth Options:")
-    print("  --server-url URL   MCP server URL (required for new servers)")
-    print("  --client-id ID     OAuth client ID (optional, uses existing or registers)")
-    print("  --force            Force re-authentication even if token is valid")
-    print("")
     print("Examples:")
-    print("  # Run commands")
-    print("  as-mcp-cli appsentinels tenant all-tenants")
-    print("  as-mcp-cli appsentinels-prod1 api list nykaa_production --limit 10")
-    print("  as-mcp-cli appsentinels --debug api tags list nykaa_production")
-    print("")
-    print("  # Authentication")
-    print("  as-mcp-cli auth appsentinels --server-url https://example.com/mcp/sse")
+    print("  as-mcp-cli mcp appsentinels tenant all-tenants")
+    print("  as-mcp-cli mcp appsentinels --debug api list tenant_name")
     print("  as-mcp-cli auth appsentinels --force")
+    print("  as-mcp-cli add my-server https://example.com/mcp/sse")
+    print("  as-mcp-cli list")
     print("")
     print("Credentials are stored in ~/.claude/.credentials.json")
+
+
+def run_mcp_command(args):
+    """Handle mcp subcommand - run commands on MCP server"""
+    global DEBUG
+
+    if not args or args[0] in ("-h", "--help"):
+        print("Usage: as-mcp-cli mcp <name> [--debug] <command>")
+        print("")
+        print("Run a command on an MCP server.")
+        print("")
+        print("Arguments:")
+        print("  name       MCP server name")
+        print("  command    Command to pass through to the MCP server")
+        print("")
+        print("Options:")
+        print("  --debug    Enable debug output")
+        print("")
+        print("Examples:")
+        print("  as-mcp-cli mcp appsentinels tenant all-tenants")
+        print("  as-mcp-cli mcp appsentinels api list nykaa_production --limit 10")
+        print("  as-mcp-cli mcp appsentinels --debug api tags list nykaa_production")
+        return 0
+
+    mcp_name = args[0]
+    args = args[1:]
+
+    if not args:
+        print(f"Error: No command provided for MCP '{mcp_name}'", file=sys.stderr)
+        return 1
+
+    if args[0] == "--debug":
+        DEBUG = True
+        args = args[1:]
+
+    if not args:
+        print(f"Error: No command provided after --debug", file=sys.stderr)
+        return 1
+
+    command = " ".join(args)
+    return run_command(command, mcp_name)
 
 
 def run_auth_command(args):
@@ -292,12 +327,12 @@ def run_auth_command(args):
     from .auth import run_auth
 
     if not args or args[0] in ("-h", "--help"):
-        print("Usage: as-mcp-cli auth <mcp_name> [options]")
+        print("Usage: as-mcp-cli auth <name> [options]")
         print("")
         print("Authenticate with an MCP server using OAuth.")
         print("")
         print("Arguments:")
-        print("  mcp_name           MCP server name to authenticate with")
+        print("  name               MCP server name to authenticate with")
         print("")
         print("Options:")
         print("  --server-url URL   MCP server SSE URL (required for new servers)")
@@ -337,6 +372,144 @@ def run_auth_command(args):
     return run_auth(mcp_name, server_url, client_id, force)
 
 
+def run_add_command(args):
+    """Handle add subcommand - add a new MCP server"""
+    from .auth import run_auth
+
+    if not args or args[0] in ("-h", "--help") or len(args) < 2:
+        print("Usage: as-mcp-cli add <name> <server-url> [--client-id ID]")
+        print("")
+        print("Add a new MCP server and authenticate.")
+        print("")
+        print("Arguments:")
+        print("  name         Name for the MCP server")
+        print("  server-url   MCP server SSE URL")
+        print("")
+        print("Options:")
+        print("  --client-id ID   OAuth client ID (optional)")
+        print("")
+        print("Examples:")
+        print("  as-mcp-cli add my-server https://example.com/mcp/sse")
+        print("  as-mcp-cli add my-server https://example.com/mcp/sse --client-id abc123")
+        return 0 if args and args[0] in ("-h", "--help") else 1
+
+    mcp_name = args[0]
+    server_url = args[1]
+    args = args[2:]
+
+    client_id = None
+
+    # Parse options
+    i = 0
+    while i < len(args):
+        if args[i] == "--client-id" and i + 1 < len(args):
+            client_id = args[i + 1]
+            i += 2
+        else:
+            print(f"Unknown option: {args[i]}", file=sys.stderr)
+            return 1
+
+    return run_auth(mcp_name, server_url, client_id, force=True)
+
+
+def run_list_command(args):
+    """Handle list subcommand - list configured MCP servers"""
+    if args and args[0] in ("-h", "--help"):
+        print("Usage: as-mcp-cli list")
+        print("")
+        print("List all configured MCP servers.")
+        return 0
+
+    creds_path = Path.home() / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        print("No credentials file found.")
+        return 0
+
+    with open(creds_path) as f:
+        creds = json.load(f)
+
+    mcp_oauth = creds.get("mcpOAuth", {})
+
+    if not mcp_oauth:
+        print("No MCP servers configured.")
+        return 0
+
+    print("Configured MCP servers:")
+    print("")
+
+    seen = {}
+    for key, value in mcp_oauth.items():
+        name = value.get("serverName", "unknown")
+        url = value.get("serverUrl", "unknown")
+        expires_at = value.get("expiresAt", 0)
+
+        # Check token status
+        import time
+        now = time.time() * 1000
+        if expires_at == 0:
+            status = "no expiry"
+        elif expires_at > now:
+            hours_left = (expires_at - now) / (1000 * 60 * 60)
+            if hours_left > 24:
+                status = f"valid ({int(hours_left/24)}d left)"
+            else:
+                status = f"valid ({int(hours_left)}h left)"
+        else:
+            status = "expired"
+
+        if name not in seen:
+            seen[name] = True
+            print(f"  {name}")
+            print(f"    URL: {url}")
+            print(f"    Token: {status}")
+            print("")
+
+    return 0
+
+
+def run_remove_command(args):
+    """Handle remove subcommand - remove an MCP server"""
+    if not args or args[0] in ("-h", "--help"):
+        print("Usage: as-mcp-cli remove <name>")
+        print("")
+        print("Remove an MCP server from configuration.")
+        print("")
+        print("Arguments:")
+        print("  name    MCP server name to remove")
+        return 0 if args and args[0] in ("-h", "--help") else 1
+
+    mcp_name = args[0]
+
+    creds_path = Path.home() / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        print("No credentials file found.", file=sys.stderr)
+        return 1
+
+    with open(creds_path) as f:
+        creds = json.load(f)
+
+    mcp_oauth = creds.get("mcpOAuth", {})
+
+    # Find and remove entries
+    to_remove = []
+    for key, value in mcp_oauth.items():
+        if value.get("serverName") == mcp_name:
+            to_remove.append(key)
+
+    if not to_remove:
+        print(f"MCP server '{mcp_name}' not found.", file=sys.stderr)
+        return 1
+
+    for key in to_remove:
+        del mcp_oauth[key]
+
+    with open(creds_path, "w") as f:
+        json.dump(creds, f, indent=2)
+
+    print(f"Removed MCP server '{mcp_name}'.")
+    return 0
+
+
 def main():
     global DEBUG
 
@@ -346,28 +519,23 @@ def main():
         print_help()
         sys.exit(0)
 
-    # Check for auth command
-    if args[0] == "auth":
-        sys.exit(run_auth_command(args[1:]))
+    cmd = args[0]
+    cmd_args = args[1:]
 
-    # First argument is the MCP name
-    mcp_name = args[0]
-    args = args[1:]
-
-    if not args:
-        print(f"Error: No command provided for MCP '{mcp_name}'", file=sys.stderr)
+    if cmd == "mcp":
+        sys.exit(run_mcp_command(cmd_args))
+    elif cmd == "auth":
+        sys.exit(run_auth_command(cmd_args))
+    elif cmd == "add":
+        sys.exit(run_add_command(cmd_args))
+    elif cmd == "list":
+        sys.exit(run_list_command(cmd_args))
+    elif cmd == "remove":
+        sys.exit(run_remove_command(cmd_args))
+    else:
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        print("Run 'as-mcp-cli --help' for usage.", file=sys.stderr)
         sys.exit(1)
-
-    if args[0] == "--debug":
-        DEBUG = True
-        args = args[1:]
-
-    if not args:
-        print(f"Error: No command provided after --debug", file=sys.stderr)
-        sys.exit(1)
-
-    command = " ".join(args)
-    sys.exit(run_command(command, mcp_name))
 
 
 if __name__ == "__main__":

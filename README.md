@@ -1,11 +1,11 @@
 # as-mcp-cli
 
-Pass-through CLI for MCP (Model Context Protocol) servers using Claude credentials.
+CLI for MCP (Model Context Protocol) servers using Claude credentials.
 
 ## Installation
 
 ```bash
-pip install -e .
+pip install --user .
 ```
 
 Or install directly:
@@ -17,62 +17,91 @@ pip install as-mcp-cli
 ## Usage
 
 ```bash
-# Run commands
-as-mcp-cli <mcp_name> [--debug] <command>
-
-# Authenticate
-as-mcp-cli auth <mcp_name> [options]
+as-mcp-cli <command> [options]
 ```
 
-### Arguments
+### Commands
 
-- `mcp_name` - MCP server name (e.g., `appsentinels`, `appsentinels-prod1`)
-- `command` - Command to pass through to the MCP server
-
-### Options
-
-- `--debug` - Enable debug output
-- `-h, --help` - Show help message
+| Command | Description |
+|---------|-------------|
+| `mcp <name> <command>` | Run a command on an MCP server |
+| `auth <name> [options]` | Authenticate with an MCP server |
+| `add <name> <url>` | Add a new MCP server |
+| `list` | List configured MCP servers |
+| `remove <name>` | Remove an MCP server |
 
 ### Examples
 
 ```bash
-# List all tenants
-as-mcp-cli appsentinels tenant all-tenants
+# Run commands on MCP server
+as-mcp-cli mcp appsentinels tenant all-tenants
+as-mcp-cli mcp appsentinels api list nykaa_production --limit 10
+as-mcp-cli mcp appsentinels --debug api tags list nykaa_production
 
-# List APIs with limit
-as-mcp-cli appsentinels-prod1 api list nykaa_production --limit 10
+# Add a new MCP server
+as-mcp-cli add my-server https://example.com/mcp/sse
 
-# With debug output
-as-mcp-cli appsentinels --debug api tags list nykaa_production
+# List configured servers
+as-mcp-cli list
+
+# Re-authenticate
+as-mcp-cli auth appsentinels --force
+
+# Remove a server
+as-mcp-cli remove my-server
+```
+
+## Commands
+
+### `mcp` - Run Commands
+
+Run commands on an MCP server:
+
+```bash
+as-mcp-cli mcp <name> [--debug] <command>
+```
+
+Options:
+- `--debug` - Enable debug output
+
+### `add` - Add Server
+
+Add a new MCP server and authenticate:
+
+```bash
+as-mcp-cli add <name> <server-url> [--client-id ID]
+```
+
+### `auth` - Authenticate
+
+Authenticate or re-authenticate with an MCP server:
+
+```bash
+as-mcp-cli auth <name> [options]
+```
+
+Options:
+- `--server-url URL` - MCP server SSE URL (required for new servers)
+- `--client-id ID` - OAuth client ID (optional)
+- `--force` - Force re-authentication even if token is valid
+
+### `list` - List Servers
+
+List all configured MCP servers with token status:
+
+```bash
+as-mcp-cli list
+```
+
+### `remove` - Remove Server
+
+Remove an MCP server from configuration:
+
+```bash
+as-mcp-cli remove <name>
 ```
 
 ## Authentication
-
-### Using Existing Credentials
-
-Credentials are automatically loaded from `~/.claude/.credentials.json`. This file is created by Claude Code when you authenticate with MCP servers.
-
-### Manual Authentication
-
-You can authenticate or re-authenticate using the `auth` command:
-
-```bash
-# Authenticate with a new MCP server
-as-mcp-cli auth my-server --server-url https://example.com/mcp/sse
-
-# Re-authenticate (force new login)
-as-mcp-cli auth appsentinels --force
-
-# Authenticate with specific client ID
-as-mcp-cli auth appsentinels --server-url https://example.com/mcp/sse --client-id my-client-id
-```
-
-### Auth Options
-
-- `--server-url URL` - MCP server SSE URL (required for new servers)
-- `--client-id ID` - OAuth client ID (optional, will use existing or attempt dynamic registration)
-- `--force` - Force re-authentication even if a valid token exists
 
 ### OAuth Flow
 
